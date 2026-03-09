@@ -1,1 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Image Resizer — InlineX</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --bg: #0e0e0e;
+      --surface: #181818;
+      --border: #2a2a2a;
+      --accent: #c9a96e;
+      --accent2: #7c6fcd;
+      --text: #f0ede8;
+      --muted: #6b6b6b;
+      --success: #4caf7d;
+      --error: #e05c5c;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px;
+    }
+
+    /* Grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    header {
+      margin-bottom: 48px;
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+
+    h1 span {
+      color: var(--accent2);
+    }
+
+    .subtitle {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .spec-pills {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .pill strong {
+      color: var(--accent);
+    }
+
+    /* Drop zone */
+    .dropzone {
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--surface);
+      position: relative;
+    }
+
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: var(--accent);
+      background: #1e1c17;
+    }
+
+    .dropzone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .drop-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .drop-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* File list */
+    .file-list {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .file-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+
+    .file-thumb {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .file-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .file-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+
+    .file-size {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .file-remove {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 4px;
+      transition: color 0.15s;
+      flex-shrink: 0;
+    }
+
+    .file-remove:hover { color: var(--error); }
+
+    /* Process button */
+    .actions {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn-process {
+      flex: 1;
+      background: var(--accent);
+      color: #0e0e0e;
+      border: none;
+      border-radius: 8px;
+      padding: 14px 24px;
+      font-family: 'Syne', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn-process:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .btn-process:active:not(:disabled) { transform: translateY(0); }
+    .btn-process:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-clear {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .btn-clear:hover { border-color: var(--error); color: var(--error); }
+
+    /* Progress */
+    .progress-wrap {
+      margin-top: 20px;
+      display: none;
+    }
+
+    .progress-wrap.active { display: block; }
+
+    .progress-bar-bg {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    /* Status message */
+    .status {
+      margin-top: 16px;
+      font-size: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .status.success {
+      display: block;
+      background: #0e2018;
+      border: 1px solid #1e4030;
+      color: var(--success);
+    }
+
+    .status.error {
+      display: block;
+      background: #200e0e;
+      border: 1px solid #401e1e;
+      color: var(--error);
+    }
+
+    /* Logic note */
+    .logic-note {
+      margin-top: 32px;
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .logic-note strong { color: var(--text); }
+
+    footer {
+      margin-top: 48px;
+      font-size: 11px;
+      color: var(--border);
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">InlineX · Tools</div>
+      <h1>Image<br/><span>Resizer</span></h1>
+      <p class="subtitle">Batch convert product images for web. Drop your files and download optimised JPEGs.</p>
+      <div class="spec-pills">
+        <span class="pill"><strong>800×800</strong> px output</span>
+        <span class="pill"><strong>JPEG</strong> q82</span>
+        <span class="pill">White background</span>
+        <span class="pill">No cropping</span>
+      </div>
+    </header>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" multiple accept="image/*" />
+      <span class="drop-icon">⬡</span>
+      <div class="drop-label">Drop images here</div>
+      <div class="drop-sub">or click to browse · JPG, PNG, WEBP, GIF</div>
+    </div>
+
+    <div class="file-list" id="fileList"></div>
+
+    <div class="actions" id="actions" style="display:none;">
+      <button class="btn-process" id="btnProcess">Process &amp; Download</button>
+      <button class="btn-clear" id="btnClear">Clear</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">Processing...</div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="logic-note">
+      <strong>Resize logic:</strong><br/>
+      1. Scale by height → fills top &amp; bottom edges. If image overflows sides → scale by width instead.<br/>
+      2. Result always fits inside 800×800 with white padding. <strong>Nothing is ever cropped.</strong>
+    </div>
+  </div>
+
+  <footer>inlinex.com.sg</footer>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const actions = document.getElementById('actions');
+    const btnProcess = document.getElementById('btnProcess');
+    const btnClear = document.getElementById('btnClear');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressFill = document.getElementById('progressFill');
+    const progressLabel = document.getElementById('progressLabel');
+    const status = document.getElementById('status');
+
+    let files = [];
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    function renderFiles() {
+      fileList.innerHTML = '';
+      files.forEach((f, i) => {
+        const url = URL.createObjectURL(f);
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML = `
+          <img class="file-thumb" src="${url}" />
+          <div class="file-info">
+            <div class="file-name">${f.name}</div>
+            <div class="file-size">${formatSize(f.size)}</div>
+          </div>
+          <button class="file-remove" data-i="${i}" title="Remove">×</button>
+        `;
+        fileList.appendChild(item);
+      });
+      actions.style.display = files.length ? 'flex' : 'none';
+    }
+
+    fileList.addEventListener('click', e => {
+      const btn = e.target.closest('.file-remove');
+      if (btn) {
+        files.splice(+btn.dataset.i, 1);
+        renderFiles();
+      }
+    });
+
+    function addFiles(newFiles) {
+      files = [...files, ...Array.from(newFiles)];
+      renderFiles();
+      setStatus('');
+    }
+
+    fileInput.addEventListener('change', () => addFiles(fileInput.files));
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      addFiles(e.dataTransfer.files);
+    });
+
+    btnClear.addEventListener('click', () => {
+      files = [];
+      fileInput.value = '';
+      renderFiles();
+      setStatus('');
+    });
+
+    function setStatus(msg, type = '') {
+      status.textContent = msg;
+      status.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function setProgress(pct, label) {
+      progressFill.style.width = pct + '%';
+      progressLabel.textContent = label;
+    }
+
+    btnProcess.addEventListener('click', async () => {
+      if (!files.length) return;
+
+      btnProcess.disabled = true;
+      progressWrap.classList.add('active');
+      setProgress(10, 'Uploading...');
+      setStatus('');
+
+      const formData = new FormData();
+      files.forEach(f => formData.append('images', f));
+
+      try {
+        setProgress(40, 'Processing images...');
+        const res = await fetch('/process', { method: 'POST', body: formData });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || 'Server error');
+        }
+
+        setProgress(90, 'Preparing download...');
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+
+        const cd = res.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : (files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') + '.jpg' : 'resized_images.zip');
+        a.href = url;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        setProgress(100, 'Done!');
+        setStatus(`✓ ${files.length} image${files.length > 1 ? 's' : ''} processed and downloaded.`, 'success');
+
+      } catch (err) {
+        setStatus('✗ ' + err.message, 'error');
+        setProgress(0, '');
+      } finally {
+        btnProcess.disabled = false;
+        setTimeout(() => progressWrap.classList.remove('active'), 2000);
+      }
+    });
+  </script>
+</body>
+</html>
