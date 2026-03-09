@@ -10,20 +10,60 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 TARGET = 800
 QUALITY = 82
 
-def process_image(img_bytes):
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+def autocrop_white(img, threshold=240):
+    """Crop white/near-white borders from image."""
+    pixels = img.load()
     w, h = img.size
 
+    top = 0
+    for y in range(h):
+        if any(pixels[x, y][c] < threshold for x in range(0, w, 3) for c in range(3)):
+            top = y
+            break
+
+    bottom = h
+    for y in range(h - 1, -1, -1):
+        if any(pixels[x, y][c] < threshold for x in range(0, w, 3) for c in range(3)):
+            bottom = y + 1
+            break
+
+    left = 0
+    for x in range(w):
+        if any(pixels[x, y][c] < threshold for y in range(0, h, 3) for c in range(3)):
+            left = x
+            break
+
+    right = w
+    for x in range(w - 1, -1, -1):
+        if any(pixels[x, y][c] < threshold for y in range(0, h, 3) for c in range(3)):
+            right = x + 1
+            break
+
+    padding = 20
+    top = max(0, top - padding)
+    bottom = min(h, bottom + padding)
+    left = max(0, left - padding)
+    right = min(w, right + padding)
+
+    return img.crop((left, top, right, bottom))
+
+def process_image(img_bytes):
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+
+    # Auto-crop white borders first
+    img = autocrop_white(img)
+    w, h = img.size
+
+    # Fill top/bottom by default (scale by height)
     scale_h = TARGET / h
     new_w_by_h = int(w * scale_h)
-
-    scale_w = TARGET / w
-    new_h_by_w = int(h * scale_w)
 
     if new_w_by_h <= TARGET:
         new_w, new_h = new_w_by_h, TARGET
     else:
-        new_w, new_h = TARGET, new_h_by_w
+        # Would overflow sides, scale by width instead
+        scale_w = TARGET / w
+        new_w, new_h = TARGET, int(h * scale_w)
 
     img = img.resize((new_w, new_h), Image.LANCZOS)
     canvas = Image.new("RGB", (TARGET, TARGET), (255, 255, 255))
